@@ -1,0 +1,116 @@
+@startuml Payslip_Analyzer_Use_Cases
+!define AWSPUML https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!include AWSPUML/AWSCommon.puml
+
+title Payslip Analyzer - Use Case Diagram
+
+' Akteure
+actor User as "Arbeitnehmer"
+actor "HR-System" as HR
+actor "AI-Engine\n(Claude)" as AI
+
+' System
+rectangle "Payslip Analyzer System" {
+
+  ' UC1: Gehaltsabrechnung hochladen
+  usecase UC1 as "PDF hochladen\n(Gehaltsabrechnung)"
+  usecase UC1_1 as "Datei ziehen & ablegen\n(Drag & Drop)"
+  usecase UC1_2 as "Datei auswählen\n(Datei-Browser)"
+  usecase UC1_3 as "Dateivalidierung"
+  
+  ' UC2: Vertragsdaten eingeben
+  usecase UC2 as "Vertragsdaten\neingeben"
+  usecase UC2_1 as "Stundenlohn eingeben"
+  usecase UC2_2 as "Monatsstunden eingeben"
+  usecase UC2_3 as "Brutto-Gehalt eingeben"
+  usecase UC2_4 as "Steuerklasse auswählen"
+  usecase UC2_5 as "Urlaubstage eingeben"
+  usecase UC2_6 as "Gehaltsberechnung\n(automatisch)"
+
+  ' UC3: Demo nutzen
+  usecase UC3 as "Demo-Daten laden"
+  usecase UC3_1 as "Mock-Daten anwenden"
+  
+  ' UC4: Abrechnung analysieren
+  usecase UC4 as "Abrechnung\nanalysieren"
+  usecase UC4_1 as "PDF extrahieren\n(pdf-parse)"
+  usecase UC4_2 as "Daten mit AI\nlesen (Claude)"
+  usecase UC4_3 as "Vergleich durchführen"
+  usecase UC4_4 as "Status ermitteln"
+
+  ' UC5: Vergleich-Ergebnisse anzeigen
+  usecase UC5 as "Ergebnisse\nanzeigen"
+  usecase UC5_1 as "Gesamtstatus anzeigen\n(✓ / ⚠ / ✗)"
+  usecase UC5_2 as "Detaillierte Vergleiche\nanzeigen"
+  usecase UC5_3 as "Abrechnungs-Übersicht\nanzeigen"
+  usecase UC5_4 as "Confidence-Score\nanzeigen"
+
+  ' UC6: Ergebnis exportieren
+  usecase UC6 as "Ergebnis\nexportieren"
+  usecase UC6_1 as "Ergebnis drucken"
+  usecase UC6_2 as "Als PDF speichern"
+  usecase UC6_3 as "An Email versenden"
+
+  ' UC7: Neue Analyse starten
+  usecase UC7 as "Neue Analyse\nstarten"
+  usecase UC7_1 as "Formular zurücksetzen"
+  usecase UC7_2 as "Workflow neustarten"
+
+  ' UC8: Empfehlungen erhalten
+  usecase UC8 as "Empfehlungen\nerhalten"
+  usecase UC8_1 as "Fehlerbehandlung\nzeigen"
+  usecase UC8_2 as "Nächste Schritte\nanzeigen"
+}
+
+' Relationen
+User --> UC1 : initiiert
+  UC1 ..> UC1_1 : include
+  UC1 ..> UC1_2 : include
+  UC1 ..> UC1_3 : include
+
+User --> UC2 : ausfüllen
+  UC2 ..> UC2_1 : include
+  UC2 ..> UC2_2 : include
+  UC2 ..> UC2_3 : include
+  UC2 ..> UC2_4 : include
+  UC2 ..> UC2_5 : include
+  UC2 ..> UC2_6 : include
+
+User --> UC3 : auswählen
+  UC3 ..> UC3_1 : include
+
+UC1 --> UC2 : nächster Schritt
+UC3 --> UC4 : nächster Schritt
+
+UC2 --> UC4 : auslösen
+  UC4 ..> UC4_1 : include
+  UC4 ..> UC4_2 : include
+  UC4 ..> UC4_3 : include
+  UC4 ..> UC4_4 : include
+
+AI --> UC4_2 : nutzt
+HR --> UC4_1 : könnte liefern
+
+UC4 --> UC5 : erzeugt
+  UC5 ..> UC5_1 : include
+  UC5 ..> UC5_2 : include
+  UC5 ..> UC5_3 : include
+  UC5 ..> UC5_4 : include
+
+User --> UC6 : optional
+  UC6 ..> UC6_1 : include
+  UC6 ..> UC6_2 : include
+  UC6 ..> UC6_3 : include (geplant)
+
+User --> UC7 : zum Starten
+  UC7 ..> UC7_1 : include
+  UC7 ..> UC7_2 : include
+
+UC5 --> UC8 : zeigt
+  UC8 ..> UC8_1 : include
+  UC8 ..> UC8_2 : include
+
+UC5 --> UC6 : ermöglicht
+UC5 --> UC7 : ermöglicht
+
+@enduml
