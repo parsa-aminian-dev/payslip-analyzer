@@ -55,37 +55,18 @@ export default function FileUpload({ onFileUpload }: FileUploadProps) {
     setError(null);
 
     try {
-      console.log('🔍 Starte PDF-Extraktion für:', selectedFile.name);
-      
       // PDF Text extrahieren und Daten parsen
       const extractedData = await extractPayslipData(selectedFile);
       
-      console.log('✅ PDF-Extraktion abgeschlossen:', extractedData);
-      
       if (extractedData) {
-        // Validiere die extrahierten Daten
-        if (extractedData.salary.gross === 0 || extractedData.workHours.total === 0) {
-          console.warn('⚠️ Extrahierte Daten könnten unvollständig sein');
-          setError('Die extrahierten Daten scheinen unvollständig zu sein. Bitte prüfe sie im nächsten Schritt.');
-        }
         onFileUpload(extractedData);
       } else {
-        const extractionMethod = (window as any).__extractionMethod;
-        let errorMessage = 'Konnte keine Daten aus der PDF extrahieren.';
-        
-        if (extractionMethod === 'failed-empty') {
-          errorMessage = '❌ PDF-Text konnte nicht extrahiert werden. Mögliche Ursachen:\n' +
-                        '• Das PDF ist ein gescanntes Bild (kein Text-Layer)\n' +
-                        '• Das PDF ist passwortgeschützt\n' +
-                        '• Das PDF-Format wird nicht unterstützt\n\n' +
-                        '💡 Tipp: Öffne die Browser-Console (F12) für Details.';
-        }
-        
-        setError(errorMessage);
+        setError('Konnte keine Daten aus der PDF extrahieren. Mögliche Ursachen: API-Key ungültig, API-Limit erreicht oder PDF-Format nicht unterstützt.');
       }
     } catch (err) {
-      console.error('❌ Fehler beim Verarbeiten der PDF:', err);
-      setError('Fehler beim Verarbeiten der PDF. Bitte versuche es erneut.');
+      console.error('Fehler beim Verarbeiten der PDF:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unbekannter Fehler';
+      setError(`Fehler beim Verarbeiten der PDF: ${errorMessage}. Bitte überprüfen Sie Ihren Google API Key in der .env.local Datei.`);
     } finally {
       setIsProcessing(false);
     }

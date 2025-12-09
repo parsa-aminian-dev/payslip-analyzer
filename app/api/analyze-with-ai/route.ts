@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PayslipData } from '@/types';
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
+
 export async function POST(request: NextRequest) {
   try {
     const { text } = await request.json();
@@ -10,86 +12,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Kein Text vorhanden' }, { status: 400 });
     }
 
-    console.log('📄 Erhaltener PDF-Text (erste 500 Zeichen):', text.substring(0, 500));
-    console.log('📄 Text-Länge:', text.length, 'Zeichen');
-
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey || apiKey.trim() === '') {
+    if (!process.env.GOOGLE_API_KEY) {
       console.error('GOOGLE_API_KEY nicht konfiguriert');
       return NextResponse.json({ error: 'API nicht konfiguriert' }, { status: 500 });
     }
 
-    console.log('API Key vorhanden:', apiKey.substring(0, 10) + '...');
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    // Verwende das neueste verfügbare Gemini-Modell
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const prompt = `Extrahiere Daten aus dieser deutschen Gehaltsabrechnung.
+    const prompt = `Analysiere diese deutsche Gehaltsabrechnung und extrahiere die Daten als JSON.
 
 TEXT:
 ${text}
 
-Finde diese Werte im Text und gib sie als JSON zurück (ohne Markdown):
-
-Beispiel wenn Text "Max Mustermann, Brutto: 3.500,00€, Netto: 2.245,00€, Stunden: 160" enthält:
+Gib NUR gültiges JSON zurück (ohne Markdown-Codeblock), mit genau dieser Struktur:
 {
-  "employeeName": "Max Mustermann",
-  "employeeId": null,
-  "period": "gefundenes Datum oder 'Dezember 2024'",
-  "workHours": {"regular": 160, "overtime": 0, "total": 160},
-  "salary": {"gross": 3500, "net": 2245, "hourlyRate": 21.88},
-  "deductions": {"taxAmount": 625, "socialSecurity": 315, "healthInsurance": 185, "pensionInsurance": 94, "unemploymentInsurance": 35, "totalDeductions": 1255},
-  "vacationDays": {"taken": 0, "remaining": 30}
+  "employeeName": "Name des Mitarbeiters oder 'Unbekannt'",
+  "employeeId": "Personalnummer falls vorhanden oder null",
+  "period": "Abrechnungsmonat z.B. 'November 2024'",
+  "workHours": {
+    "regular": Zahl der regulären Stunden,
+    "overtime": Zahl der Überstunden,
+    "total": Gesamtstunden
+  },
+  "salary": {
+    "gross": Bruttolohn als Zahl,
+    "net": Nettolohn als Zahl,
+    "hourlyRate": Stundenlohn als Zahl oder null
+  },
+  "deductions": {
+    "taxAmount": Lohnsteuer als Zahl,
+    "socialSecurity": Sozialversicherung als Zahl,
+    "healthInsurance": Krankenversicherung als Zahl,
+    "pensionInsurance": Rentenversicherung als Zahl,
+    "unemploymentInsurance": Arbeitslosenversicherung als Zahl,
+    "totalDeductions": Gesamte Abzüge als Zahl
+  },
+  "vacationDays": {
+    "taken": Genommene Urlaubstage,
+    "remaining": Verbleibende Urlaubstage
+  }
 }
 
-WICHTIG: 
-- Zahlenformat: 1.234,56€ wird zu 1234.56
-- Wenn Wert nicht im Text: schätze sinnvoll oder nutze 0
-- NUR JSON ausgeben, kein Markdown!`;
+Wenn ein Wert nicht gefunden wird, setze 0 für Zahlen. Antworte NUR mit dem JSON-Objekt.`;
 
-
-    console.log('Sende Request an Gemini...');
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    console.log('Gemini Response Status:', response);
-    
     let responseText = response.text();
-    console.log('Gemini Response Text (erste 500 Zeichen):', responseText.substring(0, 500));
-    console.log('Gemini Response Text (komplett):', responseText);
 
-    // Entferne ALLE möglichen Markdown-Varianten
-    responseText = responseText
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .replace(/^[\s\n]+/, '')
-      .replace(/[\s\n]+$/, '')
-      .trim();
-    
-    console.log('Bereinigter Text (erste 200 Zeichen):', responseText.substring(0, 200));
+    // Entferne mögliche Markdown-Codeblocks
+    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     try {
-      let payslipData: any = JSON.parse(responseText);
+      const payslipData: PayslipData = JSON.parse(responseText);
       
-      // Konvertiere null-Werte zu 0 (Fallback)
-      if (payslipData.salary) {
-        payslipData.salary.gross = payslipData.salary.gross ?? 0;
-        payslipData.salary.net = payslipData.salary.net ?? 0;
-        payslipData.salary.hourlyRate = payslipData.salary.hourlyRate ?? 0;
-      }
-      if (payslipData.workHours) {
-        payslipData.workHours.regular = payslipData.workHours.regular ?? 0;
-        payslipData.workHours.overtime = payslipData.workHours.overtime ?? 0;
-        payslipData.workHours.total = payslipData.workHours.total ?? 0;
+      // Validiere wichtige Felder
+      if (!payslipData.salary || typeof payslipData.salary.gross !== 'number') {
+        throw new Error('Ungültige Gehaltsdaten');
       }
       
-      // Wenn immer noch ungültig -> Fehler
-      if (!payslipData.salary || payslipData.salary.gross === 0) {
-        console.error('⚠️ Gemini konnte keine Daten extrahieren');
-        throw new Error('Ungültige Gehaltsdaten - verwende Fallback');
-      }
-      
-      console.log('✅ Geparste Daten:', payslipData);
       return NextResponse.json(payslipData);
     } catch (parseError) {
       console.error('JSON Parse Fehler:', parseError);
@@ -100,32 +80,19 @@ WICHTIG:
   } catch (error) {
     console.error('Gemini API Fehler:', error);
     
-    let errorMessage = 'Unbekannter Fehler';
-    let errorDetails = '';
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorDetails = error.stack || '';
-      console.error('Error Stack:', errorDetails);
+    // Detailliertere Fehlerausgabe
+    if (error && typeof error === 'object') {
+      console.error('Fehlerdetails:', JSON.stringify(error, null, 2));
     }
     
-    // Spezifische Fehlerbehandlung
-    if (errorMessage.includes('API_KEY')) {
-      return NextResponse.json(
-        { error: 'API-Schlüssel ungültig oder abgelaufen' },
-        { status: 401 }
-      );
-    }
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
-      return NextResponse.json(
-        { error: 'API-Limit erreicht. Bitte später erneut versuchen.' },
-        { status: 429 }
-      );
-    }
+    const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
     
     return NextResponse.json(
-      { error: 'KI-Analyse fehlgeschlagen', details: errorMessage },
+      { 
+        error: 'KI-Analyse fehlgeschlagen', 
+        details: errorMessage,
+        suggestion: 'Bitte überprüfen Sie Ihren Google API Key oder versuchen Sie es später erneut.'
+      },
       { status: 500 }
     );
   }
